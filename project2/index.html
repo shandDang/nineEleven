@@ -1,0 +1,348 @@
+<!-- 나중에!!!!바꿀것들 바꿔서 수정해주자 -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>9시 10분</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/Objects.js"></script>
+    <script src="../js_lib/common.js"></script>
+    <script>
+
+        // === 전역 변수 선언 ===
+        let stairNum = 130;//총 130계단입니다.
+        let stageWidth= 400;
+        let stageHeight= 600;
+        let blockArray=[];
+        //현재 블럭을 기점으로 다음 생성될 블럭의 위치를 잡기 위해 설정한 전역변수
+        //블럭 생성시에만 사용되고 움직임을 구현할 때는 신경쓰지말자
+        //어차피 blockArray로 선택된 div객체에 각각의 x좌표등이 다 담겨있다.
+        let currentX=125;
+        let currentY=550;
+        let blockHeight=50;
+        let blockWidth=100;
+        let bgX =0;
+        let bgY =0;
+        let total =0;
+        let isGameOver = false; 
+        let isInGame = false;
+        let info;
+        let hero;
+        let academyWidth = 200;
+        let academyheight = 300;
+        let academyCounter = 0;//이걸 설정해서 for문 안의 if문이 동작하도록 구현
+        
+        // 타이머 관련 변수
+        let gameStartTime;
+        let gameEndTime;
+        let gameLoopInterval;
+        let timerInterval;
+        let realStartTime; // 실제 게임 시작 시각 (Date.now()로 저장)
+        let isGameCleared = false;
+
+
+        function gameClear() {
+            //화면 자체를 제거
+            document.body.innerHTML = '';
+
+            //클리어 시 화면 생성
+            let clear = document.createElement("div");
+            clear.style.position = "absolute";
+            clear.style.top = "50%";
+            clear.style.left = "50%";
+            clear.style.transform = "translate(-50%, -50%)";
+            clear.style.width = stageWidth + "px";
+            clear.style.height = stageHeight + "px";
+            clear.style.zIndex = "9999";
+            clear.style.backgroundImage = "url('./images/clear.png')";
+            clear.style.backgroundSize = "cover";
+            clear.style.backgroundRepeat = "no-repeat";
+            clear.style.backgroundPosition = "center";
+
+            document.body.appendChild(clear);
+
+            //인터벌 중단
+            clearInterval(gameLoopInterval);
+            clearInterval(timerInterval);
+        }
+
+
+
+        
+        function gameStart(){
+            isInGame = true;
+
+            // 화면 표시용 고정 시작 시간
+            gameStartTime = new Date();
+            gameStartTime.setHours(9, 10, 30, 0);
+
+            // 실제 시작 시간 저장 (기준 시간)
+            realStartTime = Date.now();
+
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            init();
+            startBlock();
+            for(let i = 0; i < stairNum+1; i++) {
+                createBlock();
+            }
+            countFloor(0);
+            // 타이머 시작
+            startTimer();
+            gameLoopInterval = setInterval(gameLoop, 1);
+        }
+
+
+        // 타이머 시작 함수
+        function startTimer(){
+            timerInterval = setInterval(updateTimer, 100); // 0.1초마다 업데이트
+        }
+
+        function updateTimer(){
+        // 실제로 경과된 시간 계산
+            let elapsedMs = Date.now() - realStartTime;
+
+            // 표시할 시각 = 9:10:30 + 경과 시간
+            let displayTime = new Date(gameStartTime.getTime() + elapsedMs);
+
+            let hours = displayTime.getHours().toString().padStart(2, '0');
+            let minutes = displayTime.getMinutes().toString().padStart(2, '0');
+            let seconds = displayTime.getSeconds().toString().padStart(2, '0');
+
+            document.getElementById("timer").innerText = `현재시각 : ${hours}시 ${minutes}분 ${seconds}초`;
+
+            // 종료 조건 (9시 11분 이상)
+            if (displayTime.getHours() === 9 && displayTime.getMinutes() >= 11) {
+                if(blockArray.length>1){
+                    timeUp();
+                }
+            }
+        }
+
+        // 시간 종료 함수
+        function timeUp(){
+            isInGame = false;
+            clearInterval(timerInterval);
+            
+            let timeUpScreen = new Objects(document.getElementById("stage"), 0, 0, stageWidth, stageHeight, 0, "");
+			timeUpScreen.div.style.backgroundColor = "rgba(255, 0, 0, 0.8)";
+			timeUpScreen.div.style.textAlign = "center";
+			timeUpScreen.div.style.fontSize = "24px";
+            timeUpScreen.div.style.color = "white";
+			timeUpScreen.div.style.paddingTop = "250px";
+			timeUpScreen.div.innerText = "시간 종료!\n9시 11분이 되었습니다.\n지각하셨네요ㅠ.ㅠ\n다시 시작하려면 새로고침하세요.";
+            
+            deadEffect();
+            clearInterval(gameLoopInterval);
+            clearInterval(timerInterval);
+
+        }
+
+        function gameInfo(){
+            if(info == null){
+                info = new Objects(document.getElementById("gameInfo"),0,0,400,300,1,"");
+                info.div.style.fontSize = "20px";
+                info.div.style.padding = "5px 0px 0px 0px";
+                info.div.style.backgroundColor = "white";
+                info.div.innerText="9시 11분 전에 학원에 도착해야 합니다!\n← → 방향키로 움직이세요.";
+            }
+        }
+
+        //점수표시하는 함수(계단을 밟을 때마다 호출해주기//array[0]이 죽을때마다,,?)
+		function countFloor(n){//n에 대입하는 값만큼 점수가 올라감
+			total += n;
+			document.getElementById("score").innerText="오른 계단 수 : " +total;
+		}
+		
+        function createHero(){
+            hero = new Objects(document.getElementById("stage"),175,450,50,100,0,"./images/처음이미지누끼.png");
+            hero.div.style.zIndex="10";
+        }
+
+        //오른쪽 키를 눌렀을때 배경화면이 왼쪽으로 가는 이벤트
+        function rightEffect(){
+            let stage = document.getElementById("stage");
+            stage.style.backgroundPosition=`${bgX -= 100}px ${bgY += 50}px`;
+        }
+        
+        //왼쪽 키를 눌렀을때 배경화면이 오른쪽으로 가는 이벤트
+        function leftEffect(){
+            let stage = document.getElementById("stage");
+            stage.style.backgroundPosition=`${bgX += 100}px ${bgY += 50}px`;
+        }
+        
+        //제일처음 블럭 만들어서 발 밑에 고정시켜줌
+        function startBlock(){
+            block = new Objects(document.getElementById("stage"),currentX,currentY,blockWidth,blockHeight,8,"./images/블럭3누끼.png");
+            blockArray.push(block);
+        }
+
+        //제일 처음 블럭을 생성하는 함수(생성과 동시에 blockArray에 푸시가 진행됨.)
+        function createBlock(){
+            if(academyCounter < stairNum){
+                let zeroOne = getRandom(1);
+                currentX += (zeroOne === 1) ? -100 : 100;
+                currentY -= blockHeight;
+                block = new Objects(document.getElementById("stage"),currentX,currentY,blockWidth,blockHeight,8,"./images/블럭3누끼.png");
+                blockArray.push(block);
+                academyCounter++;
+            }else if(academyCounter == stairNum){
+                block = new Objects(document.getElementById("stage"),currentX-(academyWidth/2),(currentY-academyheight),academyWidth,academyheight,8,"./images/academy누끼.png");
+                blockArray.push(block);
+            }
+        }
+        //이걸 계속 쳐줘서 블럭어레이에 들어간 녀석들이 수시로 빠지게끔 해줄거임
+        //div삭제하는 기능이랑, Array에서 뺴는 기능을 같이 추가하면 한큐에 해결가능.
+        function deleteBlock() {
+            if (blockArray.length > 0) {
+                let block = blockArray[0];//배열0 번 블럭선택
+                block.div.remove();//화면에서 삭제
+                blockArray.splice(0, 1);//배열에서 제거
+            }
+            countFloor(1);
+        }
+        
+        //방향키를 누를때 마다 호출해서 블럭이 내려오도록 하는 함수.
+        function blockIsComingRight(){
+            for (let block of blockArray) {
+                block.x += 100;
+                block.y += 50;
+                block.render(); //화면에 반영
+            }
+        }
+        function blockIsComingLeft(){
+            for (let block of blockArray) {
+                block.x -= 100;
+                block.y += 50;
+                block.render(); //화면에 반영
+            }
+        }
+        
+//hero의 스타일을 결정지어 줌(누르면 바뀌고 떼면 돌아오는 함수들 모음********************************        
+        function leftStyle(){
+            hero.div.style.backgroundImage = "url('./images/왼쪽점프누끼.png')";
+        }
+        function rightStyle(){
+            hero.div.style.backgroundImage = "url('./images/오른쪽점프누끼.png')";
+        }		
+        function comebackEffect(){
+            hero.div.style.backgroundImage = "url('./images/처음이미지누끼.png')";
+        }
+        //얘는 성질은 다르지만 주인공 이미지이므로 여기 넣음
+        function deadEffect(){
+            hero.div.style.backgroundImage = "url('./images/죽은이미지누끼.png')";
+            hero.div.style.width = 100 + "px";
+            hero.div.style.height = 50 + "px";
+        }
+//***********************************************************************************************/
+        
+        //왼쪽 버튼 누를때 실행할 함수
+        function leftPressEffect(){
+            leftEffect();//배경이 오른쪽으로 움직이는 듯한 이펙트
+            deleteBlock();//블럭지워서 blockArray[0]값 다른걸로 대체 해주기
+            leftStyle();//왼쪽으로 올라가는 듯한 이미지
+            blockIsComingRight();
+        }
+        
+        //오른쪽 버튼 누를때 실행할 함수
+        function rightPressEffect(){
+            rightEffect();//배경이 왼쪽으로 움직이는 듯한 이펙트
+            deleteBlock();//블럭지워서 blockArray[0]값 다른걸로 대체 해주기
+            rightStyle();//오른쪽으로 올라가는 듯한 이미지
+            blockIsComingLeft();
+        }
+
+        //눌렀을때 움직임 구현하는 코드
+        function charMove(e){
+            switch(e.keyCode){
+                case 37 : leftPressEffect(); break;//좌측움직임
+                case 39 : rightPressEffect(); break;//우측
+            }
+        }
+        //뗏을때 다시 돌아오도록 하는 코드
+        function charComeback(e){
+            switch(e.keyCode){
+            case 37 : comebackEffect(); break;//좌측움직임
+            case 39 : comebackEffect(); break;//우측
+            }
+        }        
+
+        //blockArray[0]의 x좌표를 기준으로 게임루프를 돌려서 살았는지 죽었는지 체크
+        //그에 따라 실행할 코드작성
+        function aliveCheck(){
+            if(blockArray.length > 0 && (blockArray[0].x<=124 || blockArray[0].x>=250)){
+                gameOver();
+            }
+        }
+
+		//aliveCheck에서 죽는 것으로 바뀌는 경우 수행할 동작 설정
+		function gameOver(){
+            isGameOver = true;
+            isInGame = false;
+            clearInterval(timerInterval);
+
+			let gameOverScreen = new Objects(document.getElementById("stage"), 0, 0, stageWidth, stageHeight, 0, "");
+			gameOverScreen.div.style.backgroundColor = "rgba(255, 0, 0, 0.8)";
+			gameOverScreen.div.style.textAlign = "center";
+			gameOverScreen.div.style.fontSize = "24px";
+            gameOverScreen.div.style.color = "white";
+			gameOverScreen.div.style.paddingTop = "200px";
+			gameOverScreen.div.innerText = "지각하셨어요!\n강의실까지 : " + (stairNum-(total-1)) +"계단 남았습니다\n\n다시 도전하려면 새로고침하세요";
+
+            deadEffect();
+            clearInterval(gameLoopInterval);
+            clearInterval(timerInterval);
+
+		}
+        
+        function gameLoop(){
+            if (isInGame==true){
+                aliveCheck();
+            }
+            if(blockArray.length==1){
+                gameClear();
+                isInGame= false;//blockArray가 1이되면 게임플래그가 멈추도록설정(게임종료)
+            }
+        }
+
+        function init(){
+            createHero();
+            addEventListener("keydown", function(e){
+                if(isInGame) charMove(e);
+            });
+            addEventListener("keyup", function(e){
+                if(isInGame) charComeback(e);
+            });
+        }
+        
+        addEventListener("load", function(){
+            //초기값 isInGame -> false, menu,만 block, game은 none으로 로드해줌.
+            document.getElementById('menu').style.display = 'block';
+            document.getElementById('game').style.display = 'none';
+        })
+            </script>
+</head>
+<body>
+    <!-- 끝날때 height랑 마지막 createBlock for문 변수로바꿔주기 -->
+    <div id="wrapper">
+        <div id="game">
+            <div id="gameHeader">
+                <div id="timer"></div>
+                <div id="score"></div>
+            </div>
+            <div id="stage">
+                <div id="gameOver"></div>
+            </div>
+        </div>
+        <div id="menu">
+            <div id="startImg"></div>
+            <div id="start" onclick="gameStart()">게임시작</div>
+            <div id="gameInfo" onclick="gameInfo()">게임소개</div>
+        </div>
+    </div>
+</body>
+<!-- larva지움.
+ -->
+</html>
